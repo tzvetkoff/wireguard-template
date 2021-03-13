@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# vim:ft=sh:ts=2:sts=2:sw=2:et
+
+set -e
+
+#
+# Arguments
+#
+
+if [[ -z "${2}" ]]; then
+  echo "usage: ${0} <server-name> <server-host>" >&2
+  exit 1
+fi
+
+#
+# Variables
+#
+
+script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+server_name="${1}"
+server_path="${script_path}/../server/${server_name}"
+server_privkey="${server_path}/server.key"
+server_pubkey="${server_path}/server.pub"
+server_conf="${server_path}/server.conf"
+server_full_conf="${script_path}/../${server_name}.conf"
+server_host="${server_path}/server.host"
+
+#
+# Prepare
+#
+
+umask 0077
+mkdir -p "${server_path}"
+
+#
+# Sanity check
+#
+
+if [[ -f "${server_privkey}" || -f "${server_conf}" ]]; then
+  echo "server ${server_name} already exists" >&2
+  exit 1
+fi
+
+#
+# Generate server keys
+#
+
+wg genkey >"${server_privkey}"
+server_privkey_data="$(<"${server_privkey}")"
+wg pubkey <"${server_privkey}" >"${server_pubkey}"
+
+#
+# Create the server config
+#
+
+cat >"${server_conf}" <<EOF
+# vim:ft=dosini:ts=2:sts=2:sw=2:et
+
+[Interface]
+Address    = 10.4.0.1/24
+ListenPort = 51820
+PrivateKey = ${server_privkey_data}
+#PostUp     = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+#PostDown   = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+EOF
+
+#
+# Record hostname
+#
+
+echo "${2}" >"${server_host}"
+
+#
+# Create the full server config
+#
+
+cat "${server_conf}" >"${server_full_conf}"
+
+#
+# Open editor to do a final server config touch-up
+#
+
+${EDITOR:-vim} "${server_conf}"

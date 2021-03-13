@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# vim:ft=sh:ts=2:sts=2:sw=2:et
+
+set -e
+
+#
+# Variables
+#
+
+script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root_path="$(cd "${script_path}/.." && pwd)"
+
+#
+# Fix permissions
+#
+
+find "${root_path}" -type f -a \! -wholename "${root_path}/.git*" -print -exec chmod o-rwx,g-rwx {} +
+find "${root_path}" -type d -a \! -wholename "${root_path}/.git*" -print -exec chmod o-rwx,g-rwx {} +

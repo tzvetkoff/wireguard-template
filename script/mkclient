@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# vim:ft=sh:ts=2:sts=2:sw=2:et
+
+set -e
+
+#
+# Arguments
+#
+
+if [[ -z "${2}" ]]; then
+  echo "usage: ${0} <server-name> <client-name>" >&2
+  exit 1
+fi
+
+#
+# Variables
+#
+
+script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+server_name="${1}"
+server_path="${script_path}/../server/${server_name}"
+server_pubkey="${server_path}/server.pub"
+server_conf="${server_path}/server.conf"
+server_full_conf="${script_path}/../${server_name}.conf"
+server_host="${server_path}/server.host"
+client_name="${2}"
+client_path="${server_path}/client/${client_name}"
+client_server_conf="${client_path}/${client_name}.server.conf"
+client_client_conf="${client_path}/${client_name}.client.conf"
+client_privkey="${client_path}/${client_name}.key"
+client_pubkey="${client_path}/${client_name}.pub"
+client_psk="${client_path}/${client_name}.psk"
+
+#
+# Sanity check
+#
+
+if [[ ! -d "${server_path}" ]]; then
+  echo "server ${server_name} does not exist" >&2
+  exit 1
+fi
+
+if [[ -d "${client_path}" ]]; then
+  echo "client ${client_name} already exists" >&2
+  exit 1
+fi
+
+#
+# Prepare
+#
+
+umask 0077
+mkdir -p "${client_path}"
+
+server_pubkey_data="$(<"${server_pubkey}")"
+server_host_data="$(<"${server_host}")"
+
+#
+# Find client IP
+#
+
+client_ip="$(grep -RE '(Address|AllowedIPs) *=' "${server_full_conf}" | awk '{ print $3 }' | sort -rV | head -1)"
+client_ip="${client_ip%/*}"
+client_ip="${client_ip:-10.8.0.1}"
+IFS='.' read -ra client_ip_arr <<< "${client_ip}"
+client_ip_arr[3]=$(( client_ip_arr[3]+1 ))
+client_ip="${client_ip_arr[0]}.${client_ip_arr[1]}.${client_ip_arr[2]}.${client_ip_arr[3]}"
+
+#
+# Generate client keys
+#
+
+wg genkey >"${client_privkey}"
+client_privkey_data="$(<"${client_privkey}")"
+wg pubkey <"${client_privkey}" >"${client_pubkey}"
+client_pubkey_data="$(<"${client_pubkey}")"
+wg genpsk >"${client_psk}"
+client_psk_data="$(<"${client_psk}")"
+
+#
+# Generate client server config
+#
+
+cat >"${client_server_conf}" <<EOF
+[Peer]
+# ${client_name}
+PublicKey    = ${client_pubkey_data}
+PresharedKey = ${client_psk_data}
+AllowedIPs   = ${client_ip}/32
+EOF
+
+
+#
+# Generate client client config
+#
+
+cat >"${client_client_conf}" <<EOF
+[Interface]
+PrivateKey = ${client_privkey_data}
+Address    = ${client_ip}/32
+DNS        = 10.4.0.1
+
+[Peer]
+Endpoint     = ${server_host_data}:51820
+PublicKey    = ${server_pubkey_data}
+PresharedKey = ${client_psk_data}
+AllowedIPs   = 0.0.0.0/0, ::/0
+EOF
+
+#
+# Regenerate the full server config
+#
+
+{
+  cat "${server_conf}"
+  echo
+
+  while read -r client_conf_part; do
+    cat "${client_conf_part}"
+    echo
+  done < <(
+    grep -H 'AllowedIPs *= ' "${server_path}"/client/*/*.server.conf |\
+      awk -F'[:=]' '{ print($3, $1) }' |\
+      sort -V |\
+      awk '{ print($2) }'
+  )
+} >"${server_full_conf}"
