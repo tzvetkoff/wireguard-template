@@ -71,13 +71,13 @@ EOF
 echo "${2}" >"${server_host}"
 
 #
-# Create the full server config
-#
-
-cat "${server_conf}" >"${server_full_conf}"
-
-#
 # Open editor to do a final server config touch-up
 #
 
 ${EDITOR:-vim} "${server_conf}"
+
+#
+# Create the full server config
+#
+
+cat "${server_conf}" >"${server_full_conf}"

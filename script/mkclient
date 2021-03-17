@@ -108,6 +108,13 @@ AllowedIPs   = 0.0.0.0/0, ::/0
 EOF
 
 #
+# Open editor to do a final server/client config touch-up
+#
+
+${EDITOR:-vim} "${client_server_conf}"
+${EDITOR:-vim} "${client_client_conf}"
+
+#
 # Regenerate the full server config
 #
 
