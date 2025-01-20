@@ -56,15 +56,21 @@ server_pubkey_data="$(<"${server_pubkey}")"
 server_host_data="$(<"${server_host}")"
 
 #
-# Find client IP
+# Generate client IP
 #
 
 client_ip="$(grep -RE '(Address|AllowedIPs) *=' "${server_full_conf}" | awk '{ print $3 }' | sort -rV | head -1)"
 client_ip="${client_ip%/*}"
-client_ip="${client_ip:-10.8.0.1}"
+client_ip="${client_ip:-10.4.0.1}"
 IFS='.' read -ra client_ip_arr <<< "${client_ip}"
 client_ip_arr[3]=$(( client_ip_arr[3]+1 ))
 client_ip="${client_ip_arr[0]}.${client_ip_arr[1]}.${client_ip_arr[2]}.${client_ip_arr[3]}"
+
+#
+# Figure out DNS IP
+#
+
+dns_ip="${client_ip%.*}.1"
 
 #
 # Generate client keys
@@ -98,7 +104,7 @@ cat >"${client_client_conf}" <<EOF
 [Interface]
 PrivateKey = ${client_privkey_data}
 Address    = ${client_ip}/32
-DNS        = 10.4.0.1
+DNS        = ${dns_ip}
 
 [Peer]
 Endpoint     = ${server_host_data}:51820
